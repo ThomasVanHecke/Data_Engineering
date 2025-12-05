@@ -1,0 +1,162 @@
+networks:
+  internal_network:
+    driver: bridge
+
+volumes:
+  timescaledb_volume: null
+  azurite_volume: null 
+  prefect_volume: null
+  redpanda_volume: null
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.5
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    volumes:
+      - redpanda_volume:/var/lib/redpanda/data
+    networks:
+      - internal_network
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda_console:
+    container_name: redpanda_console
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    networks:
+      - internal_network
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - 8082:8080
+    depends_on:
+      - redpanda
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: timescaledb
+    environment:
+      - POSTGRES_DB=iiot
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - 5432:5432
+    volumes:
+      - ./timescaledb_init:/docker-entrypoint-initdb.d
+      - timescaledb_volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d iiot -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_network
+
+  jobmanager:
+    build:
+      context: ./images/flink
+      dockerfile: Dockerfile
+
+    command: jobmanager
+    hostname: jobmanager
+    ports:
+      - "8081:8081"
+      - "6123:6123"
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 2
+        parallelism.default: 2
+    volumes:
+      - ./flink_jobs:/opt/flink/usrlib
+  taskmanager:
+    build:
+      context: ./images/flink
+      dockerfile: Dockerfile
+    command: taskmanager
+    depends_on:
+      - jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ./flink_jobs:/opt/flink/usrlib
+    scale: 1
+
+  spark_master:
+    image: apache/spark:3.5.1
+    container_name: spark_master
+    hostname: spark-master
+    ports:
+      - "8083:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark_jobs:/opt/spark/apps
+      - ./spark_jobs:/opt/spark/data
+    environment:
+      - SPARK_MASTER_HOST=0.0.0.0
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    networks:
+      - internal_network
+
+  spark_worker:
+    image: apache/spark:3.5.1
+    container_name: spark_worker
+    hostname: spark_worker
+    depends_on:
+      - spark_master
+    volumes:
+      - ./spark_jobs:/opt/spark/apps
+      - ./spark_jobs:/opt/spark/data
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=1g
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    networks:
+      - internal_network
+  
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite_volume:/data
+    networks:
+      - internal_network
