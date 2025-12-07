@@ -102,7 +102,7 @@ services:
         taskmanager.numberOfTaskSlots: 2
         parallelism.default: 2
     volumes:
-      - ./flink_jobs:/opt/flink/usrlib
+      - ./flink-jobs:/opt/flink/usrlib
   taskmanager:
     build:
       context: ./images/flink
@@ -116,7 +116,7 @@ services:
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 2
     volumes:
-      - ./flink_jobs:/opt/flink/usrlib
+      - ./flink-jobs:/opt/flink/usrlib
     scale: 1
 
   spark_master:
@@ -127,8 +127,8 @@ services:
       - "8083:8080"
       - "7077:7077"
     volumes:
-      - ./spark_jobs:/opt/spark/apps
-      - ./spark_jobs:/opt/spark/data
+      - ./spark-jobs:/opt/spark/apps
+      - ./spark-jobs:/opt/spark/data
     environment:
       - SPARK_MASTER_HOST=0.0.0.0
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
@@ -142,8 +142,8 @@ services:
     depends_on:
       - spark_master
     volumes:
-      - ./spark_jobs:/opt/spark/apps
-      - ./spark_jobs:/opt/spark/data
+      - ./spark-jobs:/opt/spark/apps
+      - ./spark-jobs:/opt/spark/data
     environment:
       - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=1g
