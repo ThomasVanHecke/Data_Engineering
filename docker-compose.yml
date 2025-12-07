@@ -85,7 +85,8 @@ services:
     networks:
       - internal_network
 
-  jobmanager:
+  flink-jobmanager:
+    container_name: flink-jobmanager
     build:
       context: ./images/flink
       dockerfile: Dockerfile
@@ -99,25 +100,31 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 2
+        taskmanager.numberOfTaskSlots: 4
         parallelism.default: 2
     volumes:
-      - ./flink-jobs:/opt/flink/usrlib
-  taskmanager:
+      - ./flink-jobs:/opt/flink/usr_jobs
+    networks:
+      - internal_network
+
+  flink-taskmanager:
+    container_name: flink-taskmanager
     build:
       context: ./images/flink
       dockerfile: Dockerfile
     command: taskmanager
     depends_on:
-      - jobmanager
+      - flink-jobmanager
     environment:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 2
+        taskmanager.numberOfTaskSlots: 4
     volumes:
-      - ./flink-jobs:/opt/flink/usrlib
+      - ./flink-jobs:/opt/flink/usr_jobs
     scale: 1
+    networks:
+      - internal_network
 
   spark_master:
     image: apache/spark:3.5.1
