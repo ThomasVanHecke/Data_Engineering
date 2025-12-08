@@ -1,8 +1,9 @@
 import os
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.common.serialization import SimpleStringSchema
+from pyflink.common.watermark_strategy import TimestampAssigner
 from pyflink.table import StreamTableEnvironment, EnvironmentSettings
-from pyflink.common import Row, Types, WatermarkStrategy
+from pyflink.common import Row, Types, WatermarkStrategy, Duration
 from pyflink.datastream.connectors import JdbcSink
 from pyflink.datastream.connectors.jdbc import (
     JdbcConnectionOptions,
@@ -15,6 +16,7 @@ from pyflink.datastream.connectors.kafka import (
     KafkaSink,
     KafkaSource,
 )
+from pyflink.table.expressions import col, lit
 import time
 from datetime import datetime
 import json
@@ -82,6 +84,11 @@ def configure_timescale_sink(sql_dml: str, type_info: Types) -> JdbcSink:
         .build(),
     )
 
+class FirstElementTimestampAssigner(TimestampAssigner):
+    def extract_timestamp(self, value, record_timestamp):
+        return int(value[0].timestamp() * 1000)
+
+
 def main():
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
@@ -115,9 +122,14 @@ def main():
         redpanda_source, WatermarkStrategy.no_watermarks(), "Redpanda machine-readings topic"
     )
     
-    ds_transformed = ds_raw.map(parse_data, output_type=raw_sql_types)  
+    ds_transformed = ds_raw.map(parse_data, output_type=raw_sql_types) \
+                           .assign_timestamps_and_watermarks(
+                               WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(5))
+                               .with_timestamp_assigner(FirstElementTimestampAssigner())
+                           )
     logger.info("Defined transformations to data stream")
-    
+
+
     logger.info("Ready to sink data")
     ds_transformed.print()
     ds_transformed.add_sink(raw_data_sink)
