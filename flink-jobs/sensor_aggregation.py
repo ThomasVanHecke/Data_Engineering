@@ -5,6 +5,8 @@ from pyflink.common.watermark_strategy import TimestampAssigner
 from pyflink.table import StreamTableEnvironment, EnvironmentSettings
 from pyflink.datastream.functions import AggregateFunction, ProcessWindowFunction
 from pyflink.datastream.window import TumblingEventTimeWindows, SlidingEventTimeWindows
+from pyflink.table.window import Slide
+from pyflink.table import DataTypes, Schema
 from pyflink.common import Row, Types, WatermarkStrategy, Duration
 from pyflink.common import Time
 from pyflink.datastream.connectors import JdbcSink
@@ -225,11 +227,22 @@ def main():
                     output_type=WindowFunction.get_timescale_config()[1])
     logger.info("Defined tumbling window agg over 60s with datastream API")
 
+    ds_sliding = ds_transformed \
+        .key_by(lambda row: (row[1], row[2], row[3])) \
+        .window(SlidingEventTimeWindows.of(Time.seconds(60), Time.seconds(10))) \
+        .aggregate(Aggregator(),
+                    window_function=WindowFunction("sliding"),
+                    output_type=WindowFunction.get_timescale_config()[1])
+    logger.info("Defined tumbling window agg over 60s with datastream API")
 
-    
+
     ds_tumble.print()
     ds_tumble.add_sink(agg_data_sink)
     logger.info("Sinking agg data (tumbling) to timescale")
+
+    ds_sliding.print()
+    ds_sliding.add_sink(agg_data_sink)
+    logger.info("Sinking agg data (silding) to timescale")
 
     ds_transformed.add_sink(raw_data_sink)
     logger.info("Sinking raw parsed data to timescale")
