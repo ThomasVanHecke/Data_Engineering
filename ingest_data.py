@@ -48,7 +48,7 @@ class Machine(threading.Thread):
         while True:
             for sensor in self.sensors:
                 sensor_value = sensor.generate()
-                json_string = self.create_json(sensor_value, sensor.type, datetime.datetime.now().timestamp())
+                json_string = self.create_json(sensor_value, sensor.type, datetime.datetime.now().isoformat())
                 self.producer.send(self.topic, json_string.encode("utf-8"))
                 print(json_string)
                 sleep(2)
