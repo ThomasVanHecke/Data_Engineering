@@ -31,15 +31,34 @@ REDPANDA_TOPIC = "machine-readings"
 TIMESCALE_HOST = "timescaledb:5432"
 TIMESCALE_DB = "iiot"
 
-def parse_data(data: str) -> Row:
-    data = json.loads(data)
-    device_id = int(data["device_id"])
-    device_type = data["device_type"]
-    sensor_type = data["sensor_type"]
-    sensor_val = float(data["sensor_val"])
-    location = data["location"]
-    time = datetime.strptime(data["time"], "%Y-%m-%dT%H:%M:%S.%f")
-    return Row(time, device_id, device_type, sensor_type, sensor_val, location)
+
+class RedpandaParser:
+    @staticmethod
+    def get_timescale_config():
+        raw_data_sql = (
+            "INSERT INTO machine_sensors (time, device_id, device_type, sensor_type, sensor_val, location)"
+            "VALUES (?, ?, ?, ?, ?, ?)"
+        )
+        raw_sql_types = Types.ROW([
+                Types.SQL_TIMESTAMP(),  # time
+                Types.INT(),            # device_id
+                Types.STRING(),         # device_type
+                Types.STRING(),         # sensor_type
+                Types.DOUBLE(),         # sensor_val
+                Types.STRING(),         # location
+            ])
+        return (raw_data_sql, raw_sql_types)
+    
+    @staticmethod
+    def parse_data(data: str) -> Row:
+        data = json.loads(data)
+        device_id = int(data["device_id"])
+        device_type = data["device_type"]
+        sensor_type = data["sensor_type"]
+        sensor_val = float(data["sensor_val"])
+        location = data["location"]
+        time = datetime.strptime(data["time"], "%Y-%m-%dT%H:%M:%S.%f")
+        return Row(time, device_id, device_type, sensor_type, sensor_val, location)
 
 def initialize_env() -> StreamExecutionEnvironment:
     env = StreamExecutionEnvironment.get_execution_environment()
@@ -54,7 +73,7 @@ def initialize_env() -> StreamExecutionEnvironment:
     env.add_jars(jars[0], jars[1], jars[2])
     return env
     
-def configure_source(server: str) -> KafkaSource:
+def configure_redpanda_source(server: str) -> KafkaSource:
     properties = {
         "bootstrap.servers": server,
         "group.id": "flink-consumer",
@@ -127,18 +146,23 @@ class WindowFunction(ProcessWindowFunction):
         self.window_type = window_type
     
     @staticmethod
-    def get_out_types():
-        return Types.ROW([
-                Types.SQL_TIMESTAMP(),  # window_start
-                Types.STRING(),         # window_type
-                Types.INT(),            # device_id
-                Types.STRING(),         # device_type
-                Types.STRING(),         # sensor_type
-                Types.DOUBLE(),         # average_val
-                Types.DOUBLE(),         # min_val
-                Types.DOUBLE(),         # max_val
-                Types.INT()             # count
+    def get_timescale_config():
+        agg_data_sql = (
+        "INSERT INTO sensor_aggregates (window_start, window_type, device_id, device_type, sensor_type, average_val, min_val, max_val, count)"
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        agg_data_types = Types.ROW([
+            Types.SQL_TIMESTAMP(),  # window_start
+            Types.STRING(),         # window_type
+            Types.INT(),            # device_id
+            Types.STRING(),         # device_type
+            Types.STRING(),         # sensor_type
+            Types.DOUBLE(),         # average_val
+            Types.DOUBLE(),         # min_val
+            Types.DOUBLE(),         # max_val
+            Types.INT()             # count
             ])
+        return (agg_data_sql, agg_data_types) 
 
     def process(self, key, context, elements):
         device_id, device_type, sensor_type = key
@@ -166,62 +190,51 @@ def main():
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
     
-    logger.info("Initializing environment")
     env = initialize_env()
+    logger.info("Initialized environment")
     
-    logger.info("Configuring source and sinks")
-    redpanda_source = configure_source(REDPANDA_HOST)
+    redpanda_source = configure_redpanda_source(REDPANDA_HOST)
+    logger.info(f"Created Redpanda source from {REDPANDA_HOST}")
     
-    raw_data_sql = (
-        "INSERT INTO machine_sensors (time, device_id, device_type, sensor_type, sensor_val, location)"
-        "VALUES (?, ?, ?, ?, ?, ?)"
-    )
-    raw_sql_types = Types.ROW(
-        [
-            Types.SQL_TIMESTAMP(),
-            Types.INT(),
-            Types.STRING(),
-            Types.STRING(),
-            Types.DOUBLE(),
-            Types.STRING(),
-        ]
-    )
-    raw_data_sink = configure_timescale_sink(raw_data_sql, raw_sql_types)
+    
+    raw_data_sink = configure_timescale_sink(*RedpandaParser.get_timescale_config())
+    logger.info(f"Created TimescaleDB sink {TIMESCALE_HOST}/{TIMESCALE_DB}/machine_sensors")
 
-    agg_data_sql = (
-        "INSERT INTO sensor_aggregates (window_start, window_type, device_id, device_type, sensor_type, average_val, min_val, max_val, count)"
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    )
-    agg_data_sink = configure_timescale_sink(agg_data_sql, WindowFunction.get_out_types())
-    
-    logger.info("Source and sinks initialized")
+    agg_data_sink = configure_timescale_sink(*WindowFunction.get_timescale_config())
+    logger.info(f"Created TimescaleDB sink {TIMESCALE_HOST}/{TIMESCALE_DB}/sensor_aggregates")
+
     
     ds_raw = env.from_source(
         redpanda_source, WatermarkStrategy.no_watermarks(), "Redpanda machine-readings topic"
     )
+    logger.info(f"Created raw datastream")
     
-    ds_transformed = ds_raw.map(parse_data, output_type=raw_sql_types) \
-                           .assign_timestamps_and_watermarks(
-                               WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(5))
-                               .with_timestamp_assigner(FirstElementTimestampAssigner())
-                           )
+    ds_transformed = ds_raw \
+        .map(RedpandaParser.parse_data, output_type=RedpandaParser.get_timescale_config()[1]) \
+        .assign_timestamps_and_watermarks(
+            WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(5))
+            .with_timestamp_assigner(FirstElementTimestampAssigner())
+        )
+    logger.info(f"Defined datastream with 5s watermark and json parsing")
     
     ds_tumble = ds_transformed \
-            .key_by(lambda row: (row[1], row[2], row[3])) \
-            .window(TumblingEventTimeWindows.of(Time.seconds(60))) \
-            .aggregate(Aggregator(),
-                       window_function=WindowFunction("tumbling"),
-                       output_type=WindowFunction.get_out_types())
+        .key_by(lambda row: (row[1], row[2], row[3])) \
+        .window(TumblingEventTimeWindows.of(Time.seconds(60))) \
+        .aggregate(Aggregator(),
+                    window_function=WindowFunction("tumbling"),
+                    output_type=WindowFunction.get_timescale_config()[1])
+    logger.info("Defined tumbling window agg over 60s with datastream API")
+
+
     
-    logger.info("Defined transformations to data stream")
-
-
-    logger.info("Ready to sink data")
     ds_tumble.print()
     ds_tumble.add_sink(agg_data_sink)
+    logger.info("Sinking agg data (tumbling) to timescale")
+
     ds_transformed.add_sink(raw_data_sink)
+    logger.info("Sinking raw parsed data to timescale")
     
-    env.execute("Flink raw data ingestion")
+    env.execute("flink-data-ingestion-job")
 
 if __name__ == '__main__':
     main()
