@@ -5,4 +5,7 @@ https://medium.com/data-science/how-i-dockerized-apache-flink-kafka-and-postgres
 docker-compose exec flink-jobmanager flink run -py /opt/flink/usr_jobs/sensor_aggregation.py
 
 
-docker exec -it timescaledb psql -U admin
+docker exec -it timescaledb psql -U admin -d iiot
+
+SELECT * FROM machine_sensors ORDER BY time DESC LIMIT 10 ;
+SELECT * FROM sensor_aggregates ORDER BY window_start DESC LIMIT 10 ;

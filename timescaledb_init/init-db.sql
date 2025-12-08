@@ -13,7 +13,8 @@ SELECT create_hypertable('machine_sensors', 'time');
 SELECT add_retention_policy('machine_sensors', INTERVAL '90 days');
 
 CREATE TABLE sensor_aggregates (
-    time        TIMESTAMPTZ NOT NULL,
+    window_start        TIMESTAMPTZ NOT NULL,
+    window_type TEXT        NOT NULL,
     device_id   INT         NOT NULL,
     device_type TEXT        NOT NULL,
     sensor_type TEXT        NOT NULL,
@@ -21,7 +22,7 @@ CREATE TABLE sensor_aggregates (
     min_val     DOUBLE PRECISION NULL,
     max_val     DOUBLE PRECISION NULL,
     count       INTEGER     NOT NULL,
-    PRIMARY KEY (time, device_id)
+    PRIMARY KEY (window_start, window_type, device_id, device_type, sensor_type)
 );
-SELECT create_hypertable('sensor_aggregates', 'time');
+SELECT create_hypertable('sensor_aggregates', 'window_start');
 SELECT add_retention_policy('sensor_aggregates', INTERVAL '90 days');
