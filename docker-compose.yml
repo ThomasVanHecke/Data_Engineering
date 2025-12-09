@@ -7,6 +7,7 @@ volumes:
   azurite_volume: null 
   prefect_volume: null
   redpanda_volume: null
+  prefect_db_volume: null
 
 services:
   redpanda:
@@ -126,9 +127,12 @@ services:
     networks:
       - internal_network
 
-  spark_master:
+  spark-master:
+    build:
+        context: ./images/spark
+        dockerfile: Dockerfile
     image: apache/spark:3.5.1
-    container_name: spark_master
+    container_name: spark-master
     hostname: spark-master
     ports:
       - "8083:8080"
@@ -142,12 +146,14 @@ services:
     networks:
       - internal_network
 
-  spark_worker:
-    image: apache/spark:3.5.1
-    container_name: spark_worker
-    hostname: spark_worker
+  spark-worker:
+    build:
+      context: ./images/spark
+      dockerfile: Dockerfile
+    container_name: spark-worker
+    hostname: spark-worker
     depends_on:
-      - spark_master
+      - spark-master
     volumes:
       - ./spark-jobs:/opt/spark/apps
       - ./spark-jobs:/opt/spark/data
