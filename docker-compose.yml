@@ -106,6 +106,9 @@ services:
       - ./flink-jobs:/opt/flink/usr_jobs
     networks:
       - internal_network
+    depends_on:
+      - redpanda
+      - timescaledb
 
   flink-taskmanager:
     container_name: flink-taskmanager
@@ -141,6 +144,9 @@ services:
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     networks:
       - internal_network
+    depends_on:
+      - azurite
+      - timescaledb
 
   spark_worker:
     image: apache/spark:3.5.1
@@ -176,3 +182,5 @@ services:
     container_name: ingest
     networks:
       - internal_network
+    depends_on:
+      - redpanda
