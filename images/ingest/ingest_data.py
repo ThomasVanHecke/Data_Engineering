@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration via Environment Variables (Best for Docker)
-BOOTSTRAP_SERVERS = os.getenv('BOOTSTRAP_SERVERS', 'localhost:19092')
+BOOTSTRAP_SERVERS = os.getenv('BOOTSTRAP_SERVERS', 'redpanda:9092')
 TOPIC_NAME = os.getenv('TOPIC_NAME', 'machine-readings')
 
 class Sensor:

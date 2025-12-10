@@ -167,3 +167,12 @@ services:
       - azurite_volume:/data
     networks:
       - internal_network
+  
+  ingest:
+    build:
+      context: ./images/ingest
+      dockerfile: Dockerfile
+      network: host
+    container_name: ingest
+    networks:
+      - internal_network
