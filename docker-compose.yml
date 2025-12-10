@@ -202,6 +202,13 @@ services:
       dockerfile: Dockerfile
       network: host
     container_name: ingest
+    environment:
+      BOOTSTRAP_SERVERS: "redpanda:9092"
+      TOPIC_NAME: "machine-readings"
+      SEND_INTERVAL: "2.0"
+      GENERATE_HISTORY: true
+      HISTORY_DAYS: 7
+      
     networks:
       - internal_network
     depends_on:
