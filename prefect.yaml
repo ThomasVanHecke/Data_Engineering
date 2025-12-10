@@ -1,0 +1,40 @@
+# Welcome to your prefect.yaml file! You can use this file for storing and managing
+# configuration for deploying your flows. We recommend committing this file to source
+# control along with your flow code.
+
+# Generic metadata about this project
+name: Data_Engineering
+prefect-version: 3.5.0
+
+# build section allows you to manage and build docker images
+build: null
+
+# push section allows you to manage if and how this project is uploaded to remote locations
+push: null
+
+# pull section allows you to provide instructions for cloning this project in remote locations
+pull:
+- prefect.deployments.steps.set_working_directory:
+    directory: /home/zeger/Projects/Data_Engineering
+
+# the deployments section allows you to provide configuration for deploying flows
+deployments:
+- name: Nightly ETL Deployment
+  version: null
+  tags:
+  - etl
+  - nightly
+  - spark
+  - production
+  concurrency_limit: null
+  description: The main ETL flow orchestrating all tasks for the nightly data processing.
+  entrypoint: prefect-flows/nightly_etl_flow.py:nightly_etl_flow
+  parameters: {}
+  work_pool:
+    name: local-test
+    work_queue_name: production-etl
+    job_variables: {}
+  schedules:
+  - cron: 0 2 * * *
+    timezone: UTC
+    day_or: true
