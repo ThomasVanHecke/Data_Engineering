@@ -7,6 +7,7 @@ volumes:
   azurite_volume: null 
   prefect_volume: null
   redpanda_volume: null
+  prefect_data: null
 
 services:
   redpanda:
@@ -184,3 +185,40 @@ services:
       - internal_network
     depends_on:
       - redpanda
+    
+  prefect_db:
+    container_name: "prefect_db"
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=prefect
+      - POSTGRES_PASSWORD=prefect
+      - POSTGRES_DB=prefect
+    volumes:
+      - prefect_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  prefect:
+    container_name: "prefect"
+    image: prefecthq/prefect:3-latest
+    restart: always
+    entrypoint: ["prefect", "server", "start"]
+    environment:
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_SERVER_API_PORT=4200
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://prefect:prefect@prefect_db:5432/prefect
+      - PREFECT_UI_ENABLED=true 
+    ports:
+      - "4200:4200"
+    depends_on:
+      prefect_db:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:4200/api/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
