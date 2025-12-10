@@ -64,7 +64,8 @@ services:
     ports:
       - 8082:8080
     depends_on:
-      - redpanda
+      redpanda:
+        condition: service_started
 
   timescaledb:
     image: timescale/timescaledb:latest-pg17
@@ -107,9 +108,18 @@ services:
       - ./flink-jobs:/opt/flink/usr_jobs
     networks:
       - internal_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/overview"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
     depends_on:
-      - redpanda
-      - timescaledb
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
 
   flink-taskmanager:
     container_name: flink-taskmanager
@@ -118,7 +128,8 @@ services:
       dockerfile: Dockerfile
     command: taskmanager
     depends_on:
-      - flink-jobmanager
+      flink-jobmanager:
+        condition: service_healthy
     environment:
       - |
         FLINK_PROPERTIES=
@@ -145,16 +156,26 @@ services:
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     networks:
       - internal_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
     depends_on:
-      - azurite
-      - timescaledb
+      azurite:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
 
   spark_worker:
     image: apache/spark:3.5.1
     container_name: spark_worker
     hostname: spark_worker
     depends_on:
-      - spark_master
+      spark_master:
+        condition: service_healthy
     volumes:
       - ./spark-jobs:/opt/spark/apps
       - ./spark-jobs:/opt/spark/data
@@ -184,7 +205,8 @@ services:
     networks:
       - internal_network
     depends_on:
-      - redpanda
+      redpanda:
+        condition: service_healthy
     
   prefect_db:
     container_name: "prefect_db"
