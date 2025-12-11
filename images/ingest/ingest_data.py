@@ -10,7 +10,7 @@ from kafka import KafkaProducer, errors, KafkaAdminClient
 from kafka.admin import NewTopic
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - [Machine-%(threadName)s] - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ def wait_for_kafka_and_setup():
     logger.info("Initializing Producer...")
     producer = KafkaProducer(
         bootstrap_servers=BOOTSTRAP_SERVERS,
-        acks=0, 
+        acks='all', 
         retries=5,
         compression_type='gzip',
         batch_size=16384,

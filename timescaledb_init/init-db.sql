@@ -7,7 +7,7 @@ CREATE TABLE machine_sensors (
     sensor_type TEXT        NOT NULL,
     sensor_val  DOUBLE PRECISION,
     location    TEXT        NULL,
-    PRIMARY KEY (time, device_id)
+    PRIMARY KEY (time, device_id, sensor_type)
 );
 SELECT create_hypertable('machine_sensors', 'time');
 SELECT add_retention_policy('machine_sensors', INTERVAL '90 days');
