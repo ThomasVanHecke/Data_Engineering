@@ -8,6 +8,7 @@ volumes:
   prefect_volume: null
   redpanda_volume: null
   prefect_data: null
+  pgadmin_data: null
 
 services:
   redpanda:
@@ -241,6 +242,7 @@ services:
       - PREFECT_SERVER_API_PORT=4200
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://prefect:prefect@prefect_db:5432/prefect
       - PREFECT_UI_ENABLED=true 
+      - PREFECT_UI_API_URL=/api
     ports:
       - "4200:4200"
     depends_on:
@@ -251,3 +253,21 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Optional GUI: http://localhost:5050 (email/password below)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - internal_network
