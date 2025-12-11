@@ -73,7 +73,10 @@ def initialize_env() -> StreamExecutionEnvironment:
     ]
     
     env.add_jars(jars[0], jars[1], jars[2])
-    return env
+
+    t_env = StreamTableEnvironment.create(env)
+
+    return env, t_env
     
 def configure_redpanda_source(server: str) -> KafkaSource:
     properties = {
@@ -192,7 +195,7 @@ def main():
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
     
-    env = initialize_env()
+    env, t_env = initialize_env()
     logger.info("Initialized environment")
     
     redpanda_source = configure_redpanda_source(REDPANDA_HOST)
@@ -219,13 +222,13 @@ def main():
         )
     logger.info(f"Defined datastream with 5s watermark and json parsing")
     
-    ds_tumble = ds_transformed \
-        .key_by(lambda row: (row[1], row[2], row[3])) \
-        .window(TumblingEventTimeWindows.of(Time.seconds(60))) \
-        .aggregate(Aggregator(),
-                    window_function=WindowFunction("tumbling"),
-                    output_type=WindowFunction.get_timescale_config()[1])
-    logger.info("Defined tumbling window agg over 60s with datastream API")
+    #ds_tumble = ds_transformed \
+    #    .key_by(lambda row: (row[1], row[2], row[3])) \
+    #    .window(TumblingEventTimeWindows.of(Time.seconds(60))) \
+    #    .aggregate(Aggregator(),
+    #                window_function=WindowFunction("tumbling"),
+    #                output_type=WindowFunction.get_timescale_config()[1])
+    #logger.info("Defined tumbling window agg over 60s with datastream API")
 
     ds_sliding = ds_transformed \
         .key_by(lambda row: (row[1], row[2], row[3])) \
@@ -233,12 +236,12 @@ def main():
         .aggregate(Aggregator(),
                     window_function=WindowFunction("sliding"),
                     output_type=WindowFunction.get_timescale_config()[1])
-    logger.info("Defined tumbling window agg over 60s with datastream API")
+    logger.info("Defined sliding window agg over 60s with datastream API")
 
 
-    ds_tumble.print()
-    ds_tumble.add_sink(agg_data_sink)
-    logger.info("Sinking agg data (tumbling) to timescale")
+    #ds_tumble.print()
+    #ds_tumble.add_sink(agg_data_sink)
+    #logger.info("Sinking agg data (tumbling) to timescale")
 
     ds_sliding.print()
     ds_sliding.add_sink(agg_data_sink)
