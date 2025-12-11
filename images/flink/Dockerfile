@@ -28,6 +28,11 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY download_libs.sh .
-RUN chmod +x ./download_libs.sh && ./download_libs.sh
+RUN ls -l && pwd
+
+RUN set -eux; \
+    sed -i 's/\r$//' download_libs.sh; \
+    chmod +x download_libs.sh; \
+    /bin/sh ./download_libs.sh
 
 RUN mkdir -p /opt/flink/conf/flink-conf/
