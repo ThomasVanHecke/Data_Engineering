@@ -15,3 +15,5 @@ AZURITE_CONN_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;
 
 
 prefect deploy prefect-flows/nightly_etl_flow.py:nightly_etl_flow --name "Nightly ETL Deployment" --cron "0 2 * * *" --timezone "UTC" --work-queue "production-etl" --tag "etl"  --tag "nightly" --tag "spark" --tag "production"
+
+spark-submit --packages "io.delta:delta-spark_2.13:4.0.0,org.apache.hadoop:hadoop-azure:3.4.0,com.microsoft.azure:azure-storage:8.6.6,org.postgresql:postgresql:42.7.8" --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" .\spark-jobs\timescale_to_deltalake.py
