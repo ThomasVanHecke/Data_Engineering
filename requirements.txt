@@ -1,0 +1,6 @@
+kafka-python
+apache-flink
+prefect
+psycopg2-binary
+azure-storage-blob
+python-dotenv
